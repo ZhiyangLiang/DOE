@@ -66,8 +66,8 @@ class AdvWeightPerturb(object):
 
     def calc_awp_simple(self, inputs_adv, cluster_head, steps = 1, gamma = None):
         def target_distribution(batch: torch.Tensor) -> torch.Tensor:
-            weight = (batch ** 2) / torch.sum(batch, 0)
-            return (weight.t() / torch.sum(weight, 1)).t()
+            weight = (batch ** 2) / torch.sum(batch, 0) # 对样本的权值进行归一化
+            return (weight.t() / torch.sum(weight, 1)).t() # 对类的的权重进行归一化
         
         self.proxy.load_state_dict(self.model.state_dict())
         self.proxy.train()
@@ -97,7 +97,7 @@ class AdvWeightPerturb(object):
             self.gamma = gamma
         for _ in range(steps):
             x = self.proxy(inputs_adv)
-            l_oe = -(x.mean(1) - torch.logsumexp(x, dim=1)).mean() # / x.size(1)
+            l_oe = -(x.mean(1) - torch.logsumexp(x, dim=1)).mean() # / x.size(1) # 为什么不除以x.size(1)
             # l_oe = -(x.mean(1) - x.exp().sum(1)).mean()
             # l_oe = x.exp().mean(1).mean()
             # torch.logsumexp(x, dim=1)).mean() # / x.size(1)
@@ -111,7 +111,7 @@ class AdvWeightPerturb(object):
         diff = diff_in_weights(self.model, self.proxy)
         return diff
 
-    def calc_awp_reg(self, inputs_adv, steps = 1, gamma = None):
+    def calc_awp_reg(self, inputs_adv, steps = 1, gamma = None): # 为什么这个函数没有clip_grad_norm_
         self.proxy.load_state_dict(self.model.state_dict())
         self.proxy.train()
         

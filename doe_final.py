@@ -13,9 +13,12 @@ import utils.utils_awp as awp
 from utils.display_results import  get_measures, print_measures
 from utils.validation_dataset import validation_split
 
+import os
+import logging
+
 parser = argparse.ArgumentParser(description='Tunes a CIFAR Classifier with DOE',
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('dataset', type=str, choices=['cifar10', 'cifar100'],
+parser.add_argument('--dataset', type=str, choices=['cifar10', 'cifar100'],
                     help='Choose between CIFAR-10, CIFAR-100.')
 parser.add_argument('--calibration', '-c', action='store_true',
                     help='Train a model to be used for calibration. This holds out some data for validation.')
@@ -46,15 +49,24 @@ parser.add_argument('--seed', type=int, default=1, help='seed for np(tinyimages8
 parser.add_argument('--warmup', type=int, default=5)
 parser.add_argument('--begin_epoch', type=int, default=0)
 
-
+torch.cuda.set_device(0) # 选择第0张卡
 
 args = parser.parse_args()
 torch.manual_seed(1)
 np.random.seed(args.seed)
 torch.cuda.manual_seed(1)
 
-cudnn.benchmark = True  # fire on all cylinders
+log = logging.getLogger("cifar100_std.log")
+fileHandler = logging.FileHandler("./logging/cifar100_std.log", mode='a')
+log.setLevel(logging.DEBUG)
+log.addHandler(fileHandler)
+log.debug("cifar100_std.log")
+log.debug("")
+for k, v in args._get_kwargs():
+    log.debug(str(k)+": "+str(v))
+log.debug("")
 
+cudnn.benchmark = True  # fire on all cylinders
 
 # mean and standard deviation of channels of CIFAR-10 images
 if 'cifar' in args.dataset:
@@ -70,27 +82,27 @@ train_transform = trn.Compose([trn.RandomHorizontalFlip(), trn.RandomCrop(32, pa
 test_transform = trn.Compose([trn.ToTensor(), trn.Normalize(mean, std)])
 
 if args.dataset == 'cifar10':
-    train_data_in = dset.CIFAR10('../data/cifarpy', train=True, transform=train_transform)
-    test_data = dset.CIFAR10('../data/cifarpy', train=False, transform=test_transform)
-    cifar_data = dset.CIFAR100('../data/cifarpy', train=False, transform=test_transform) 
+    train_data_in = dset.CIFAR10('../data/cifar10', train=True, transform=train_transform, download=True)
+    test_data = dset.CIFAR10('../data/cifar10', train=False, transform=test_transform)
+    cifar_data = dset.CIFAR100('../data/cifar100', train=False, transform=test_transform) 
     num_classes = 10
 else:
-    train_data_in = dset.CIFAR100('../data/cifarpy', train=True, transform=train_transform, download=True)
-    test_data = dset.CIFAR100('../data/cifarpy', train=False, transform=test_transform)
-    cifar_data = dset.CIFAR10('../data/cifarpy', train=False, transform=test_transform)
+    train_data_in = dset.CIFAR100('../data/cifar100', train=True, transform=train_transform, download=True)
+    test_data = dset.CIFAR100('../data/cifar100', train=False, transform=test_transform)
+    cifar_data = dset.CIFAR10('../data/cifar10', train=False, transform=test_transform)
     num_classes = 100
 calib_indicator = ''
 if args.calibration:
     train_data_in, val_data = validation_split(train_data_in, val_share=0.1)
     calib_indicator = '_calib'
-ood_data = dset.ImageFolder(root="../data/tiny-imagenet-200/train/", transform=trn.Compose([trn.Resize(32), trn.RandomCrop(32, padding=4), trn.RandomHorizontalFlip(), trn.ToTensor(), trn.Normalize(mean, std)]))
+ood_data = dset.ImageFolder(root="../data/tiny-imagenet-200/train", transform=trn.Compose([trn.Resize(32), trn.RandomCrop(32, padding=4), trn.RandomHorizontalFlip(), trn.ToTensor(), trn.Normalize(mean, std)]))
 
 train_loader_in = torch.utils.data.DataLoader(train_data_in, batch_size=args.batch_size, shuffle=True, num_workers=args.prefetch, pin_memory=False)
 train_loader_out = torch.utils.data.DataLoader(ood_data, batch_size=args.oe_batch_size, shuffle=True, num_workers=args.prefetch, pin_memory=True)
 test_loader = torch.utils.data.DataLoader(test_data, batch_size=args.batch_size, shuffle=False, num_workers=args.prefetch, pin_memory=False)
 
 texture_data = dset.ImageFolder(root="../data/dtd/images", transform=trn.Compose([trn.Resize(32), trn.CenterCrop(32), trn.ToTensor(), trn.Normalize(mean, std)]))
-places365_data = dset.ImageFolder(root="../data/places365_standard/", transform=trn.Compose([trn.Resize(32), trn.CenterCrop(32), trn.ToTensor(), trn.Normalize(mean, std)]))
+places365_data = dset.ImageFolder(root="../data/places365", transform=trn.Compose([trn.Resize(32), trn.CenterCrop(32), trn.ToTensor(), trn.Normalize(mean, std)]))
 lsunc_data = dset.ImageFolder(root="../data/LSUN", transform=trn.Compose([trn.Resize(32), trn.ToTensor(), trn.Normalize(mean, std)]))
 lsunr_data = dset.ImageFolder(root="../data/LSUN_resize", transform=trn.Compose([trn.Resize(32), trn.ToTensor(), trn.Normalize(mean, std)]))
 isun_data = dset.ImageFolder(root="../data/iSUN",transform=trn.Compose([trn.ToTensor(), trn.Normalize(mean, std)]))
@@ -117,14 +129,14 @@ def get_ood_scores(loader, in_dist=False):
             data, target = data.cuda(), target.cuda()
             output = net(data)
             # smax = to_np(F.softmax(output, dim=1))
-            smax = to_np(output)
-            _score.append(-np.max(smax, axis=1))
+            smax = to_np(output) # DOE中使用的score
+            _score.append(-np.max(smax, axis=1)) # DOE中使用的score
     if in_dist:
         return concat(_score).copy() # , concat(_right_score).copy(), concat(_wrong_score).copy()
     else:
         return concat(_score)[:ood_num_examples].copy()
 
-def get_and_print_results(ood_loader, in_score, num_to_avg=args.num_to_avg):
+def get_and_print_results(mylog, ood_loader, in_score, num_to_avg=args.num_to_avg):
     net.eval()
     aurocs, auprs, fprs = [], [], []
     for _ in range(num_to_avg):
@@ -135,7 +147,7 @@ def get_and_print_results(ood_loader, in_score, num_to_avg=args.num_to_avg):
             measures = get_measures(-in_score, -out_score)
         aurocs.append(measures[0]); auprs.append(measures[1]); fprs.append(measures[2])
     auroc = np.mean(aurocs); aupr = np.mean(auprs); fpr = np.mean(fprs)
-    print_measures(auroc, aupr, fpr, '')
+    print_measures(mylog, auroc, aupr, fpr, '')
     return fpr, auroc, aupr
 
 
@@ -179,7 +191,7 @@ def train(epoch, diff):
         
         x = net(data)
         l_ce = F.cross_entropy(x[:len(in_set[0])], target)
-        l_oe = - (x[len(in_set[0]):].mean(1) - torch.logsumexp(x[len(in_set[0]):], dim=1)).mean()
+        l_oe = - (x[len(in_set[0]):].mean(1) - torch.logsumexp(x[len(in_set[0]):], dim=1)).mean() # 与l_oe的表达式不完全一致, 但训练效果是一致的
         if args.dataset == 'cifar10':
             if epoch >= args.warmup:
                 loss = l_oe
@@ -193,7 +205,7 @@ def train(epoch, diff):
             
         optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(net.parameters(), 1) 
+        torch.nn.utils.clip_grad_norm_(net.parameters(), 1) # 梯度裁剪, 采样的是2范数, 限制最大值不超过1
         optimizer.step()
 
         if epoch >= args.warmup:
@@ -236,28 +248,39 @@ else:
     model_path = './ckpt/cifar100_wrn_pretrained_epoch_99.pt'
 net.load_state_dict(torch.load(model_path))
 optimizer = torch.optim.SGD(net.parameters(), args.learning_rate, momentum=args.momentum, weight_decay=args.decay, nesterov=True)
+
 def cosine_annealing(step, total_steps, lr_max, lr_min):
     return lr_min + (lr_max - lr_min) * 0.5 * (1 + np.cos(step / total_steps * np.pi))
+
 scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda step: cosine_annealing(step, args.epochs * len(train_loader_in), 1, 1e-6 / args.learning_rate))
 diff = None
 
 
-for epoch in range(args.begin_epoch, args.epochs - 1):
+# for epoch in range(args.begin_epoch, args.epochs - 1):
+for epoch in range(args.begin_epoch, args.epochs): # 修改
     diff = train(epoch, diff)
 
 net.eval()
 print('  FPR95 AUROC AUPR (acc %.2f)' % test())
+log.debug('  FPR95 AUROC AUPR (acc %.2f)' % test())
 in_score = get_ood_scores(test_loader, in_dist=True)
 metric_ll = []
 print('lsun')
-metric_ll.append(get_and_print_results(lsunc_loader, in_score))
+log.debug('lsun')
+metric_ll.append(get_and_print_results(log, lsunc_loader, in_score))
 print('isun')
-metric_ll.append(get_and_print_results(isun_loader, in_score))
+log.debug('isun')
+metric_ll.append(get_and_print_results(log, isun_loader, in_score))
 print('texture')
-metric_ll.append(get_and_print_results(texture_loader, in_score))
+log.debug('texture')
+metric_ll.append(get_and_print_results(log, texture_loader, in_score))
 print('places')
-metric_ll.append(get_and_print_results(places365_loader, in_score))
+log.debug('places')
+metric_ll.append(get_and_print_results(log, places365_loader, in_score))
 print('total')
+log.debug('total')
 print('& %.2f & %.2f & %.2f' % tuple((100 * torch.Tensor(metric_ll).mean(0)).tolist()))
+log.debug('& %.2f & %.2f & %.2f' % tuple((100 * torch.Tensor(metric_ll).mean(0)).tolist()))
 print('cifar')
-get_and_print_results(cifar_loader, in_score)
+log.debug('cifar')
+get_and_print_results(log, cifar_loader, in_score)

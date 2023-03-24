@@ -15,7 +15,7 @@ def stable_cumsum(arr, rtol=1e-05, atol=1e-08):
     atol : float
         Absolute tolerance, see ``np.allclose``
     """
-    out = np.cumsum(arr, dtype=np.float64)
+    out = np.cumsum(arr, dtype=np.float64) # 累积加法, 即最后一个得到的元素为数组中全部元素之和
     expected = np.sum(arr, dtype=np.float64)
     if not np.allclose(out[-1], expected, rtol=rtol, atol=atol):
         raise RuntimeError('cumsum was found to be unstable: '
@@ -96,10 +96,11 @@ def show_performance(pos, neg, method_name='Ours', recall_level=recall_level_def
     # print('FDR{:d}:\t\t\t{:.2f}'.format(int(100 * recall_level), 100 * fdr))
 
 
-def print_measures(auroc, aupr, fpr, method_name='Ours', recall_level=recall_level_default):
+def print_measures(mylog, auroc, aupr, fpr, method_name='Ours', recall_level=recall_level_default):
     # print('\t\t\t\t' + method_name)
     # print('  FPR{:d} AUROC AUPR'.format(int(100*recall_level)))
     print('& {:.2f} & {:.2f} & {:.2f}'.format(100*fpr, 100*auroc, 100*aupr))
+    mylog.debug('& {:.2f} & {:.2f} & {:.2f}'.format(100*fpr, 100*auroc, 100*aupr))
     #print('FPR{:d}:\t\t\t{:.2f}'.format(int(100 * recall_level), 100 * fpr))
     #print('AUROC: \t\t\t{:.2f}'.format(100 * auroc))
     #print('AUPR:  \t\t\t{:.2f}'.format(100 * aupr))
