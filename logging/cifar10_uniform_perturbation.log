@@ -1,0 +1,37 @@
+cifar10_uniform_perturbation.log
+
+batch_size: 128
+begin_epoch: 0
+calibration: False
+dataset: cifar10
+decay: 0.0005
+droprate: 0.3
+epochs: 10
+layers: 40
+learning_rate: 0.01
+momentum: 0.9
+ngpu: 1
+num_to_avg: 1
+oe_batch_size: 256
+out_as_pos: False
+prefetch: 4
+seed: 1
+test: False
+test_bs: 200
+use_xent: False
+warmup: 5
+widen_factor: 2
+
+  FPR95 AUROC AUPR (acc 10.00)
+lsun
+& 91.50 & 31.93 & 72.87
+isun
+& 96.35 & 44.44 & 81.41
+texture
+& 95.40 & 37.96 & 76.27
+places
+& 95.80 & 42.20 & 79.55
+total
+& 94.76 & 39.13 & 77.53
+cifar
+& 95.25 & 46.09 & 80.52
