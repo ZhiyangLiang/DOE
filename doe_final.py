@@ -56,11 +56,11 @@ torch.manual_seed(1)
 np.random.seed(args.seed)
 torch.cuda.manual_seed(1)
 
-log = logging.getLogger("cifar100_std.log")
-fileHandler = logging.FileHandler("./logging/cifar100_std.log", mode='a')
+log = logging.getLogger("cifar100_+_to_-.log")
+fileHandler = logging.FileHandler("./logging/cifar100_+_to_-.log", mode='a')
 log.setLevel(logging.DEBUG)
 log.addHandler(fileHandler)
-log.debug("cifar100_std.log")
+log.debug("cifar100_+_to_-.log")
 log.debug("")
 for k, v in args._get_kwargs():
     log.debug(str(k)+": "+str(v))
@@ -95,7 +95,7 @@ calib_indicator = ''
 if args.calibration:
     train_data_in, val_data = validation_split(train_data_in, val_share=0.1)
     calib_indicator = '_calib'
-ood_data = dset.ImageFolder(root="../data/tiny-imagenet-200/train", transform=trn.Compose([trn.Resize(32), trn.RandomCrop(32, padding=4), trn.RandomHorizontalFlip(), trn.ToTensor(), trn.Normalize(mean, std)]))
+ood_data = dset.ImageFolder(root="../data/tiny-imagenet-200/train", transform=trn.Compose([trn.Resize(32), trn.RandomCrop(32, padding=4), trn.RandomHorizontalFlip(), trn.ToTensor(), trn.Normalize(mean, std)])) # test(3)
 
 train_loader_in = torch.utils.data.DataLoader(train_data_in, batch_size=args.batch_size, shuffle=True, num_workers=args.prefetch, pin_memory=False)
 train_loader_out = torch.utils.data.DataLoader(ood_data, batch_size=args.oe_batch_size, shuffle=True, num_workers=args.prefetch, pin_memory=True)
@@ -150,11 +150,24 @@ def get_and_print_results(mylog, ood_loader, in_score, num_to_avg=args.num_to_av
     print_measures(mylog, auroc, aupr, fpr, '')
     return fpr, auroc, aupr
 
+def add_gaussian_noise(model, coeff):
+    with torch.no_grad():
+        for name, param in model.named_parameters():
+            noise = torch.empty_like(param).normal_(0, 1)
+            param.add_(coeff * noise)
+
+def add_uniform_noise(model, coeff):
+    with torch.no_grad():
+        for name, param in model.named_parameters():
+            noise = torch.empty_like(param).uniform_(-1, 1)
+            param.add_(coeff * noise)
 
 def train(epoch, diff):
     
+    # adjust_learning_rate(optimizer, epoch) # POEM中使用的学习率调整方法
+    
     proxy = WideResNet(args.layers, num_classes, args.widen_factor, dropRate = 0).cuda()
-    proxy_optim = torch.optim.SGD(proxy.parameters(), lr=1)
+    proxy_optim = torch.optim.SGD(proxy.parameters(), lr=1) # 辅助模型
 
     net.train()
 
@@ -173,25 +186,29 @@ def train(epoch, diff):
             proxy.train()
             scale = torch.Tensor([1]).cuda().requires_grad_()
             x = proxy(data) * scale
-            l_sur = (x[len(in_set[0]):].mean(1) - torch.logsumexp(x[len(in_set[0]):], dim=1)).mean()
+            l_sur = (x[len(in_set[0]):].mean(1) - torch.logsumexp(x[len(in_set[0]):], dim=1)).mean() # 这里求的是min Loe, 所以会差一个负号
             # l_sur = - (x.log_softmax(1) * (x / 0.1).softmax(1).detach()).sum(-1).mean()
-            reg_sur = torch.sum(torch.autograd.grad(l_sur, [scale], create_graph = True)[0] ** 2)
+            reg_sur = torch.sum(torch.autograd.grad(l_sur, [scale], create_graph = True)[0] ** 2) # 计算l_sur关于scale的梯度，并将其平方后求和
             proxy_optim.zero_grad()
             reg_sur.backward()
             # l_sur.backward()
-            torch.nn.utils.clip_grad_norm_(net.parameters(), 1)
+            torch.nn.utils.clip_grad_norm_(net.parameters(), 1) # norm操作(test2)
             proxy_optim.step()
             if epoch == args.warmup and batch_idx == 0:
-                diff = awp.diff_in_weights(net, proxy)
+                diff = awp.diff_in_weights(net, proxy) # 微分操作(仅在第一次使用, 因为第一次无法加权平均)
             else:
                 # diff = awp.diff_in_weights(net, proxy)
-                diff = awp.average_diff(diff, awp.diff_in_weights(net, proxy), beta = .6)
+                diff = awp.average_diff(diff, awp.diff_in_weights(net, proxy), beta = .6) # 指数加权平均操作
 
-            awp.add_into_weights(net, diff, coeff = gamma)
+            # awp.add_into_weights(net, diff, coeff = gamma)
+            awp.add_into_weights(net, diff, coeff = - gamma) # 修改
+
+            # add_gaussian_noise(net, coeff = gamma) # 添加高斯分布的扰动
+            # add_uniform_noise(net, coeff = gamma) # 添加均匀分布的扰动
         
         x = net(data)
         l_ce = F.cross_entropy(x[:len(in_set[0])], target)
-        l_oe = - (x[len(in_set[0]):].mean(1) - torch.logsumexp(x[len(in_set[0]):], dim=1)).mean() # 与l_oe的表达式不完全一致, 但训练效果是一致的
+        l_oe = - (x[len(in_set[0]):].mean(1) - torch.logsumexp(x[len(in_set[0]):], dim=1)).mean()
         if args.dataset == 'cifar10':
             if epoch >= args.warmup:
                 loss = l_oe
@@ -205,7 +222,7 @@ def train(epoch, diff):
             
         optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(net.parameters(), 1) # 梯度裁剪, 采样的是2范数, 限制最大值不超过1
+        torch.nn.utils.clip_grad_norm_(net.parameters(), 1) # norm操作(test3)
         optimizer.step()
 
         if epoch >= args.warmup:
@@ -215,7 +232,7 @@ def train(epoch, diff):
             l_ce = F.cross_entropy(x[:len(in_set[0])], target)
             loss = l_ce # + l_kl
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(net.parameters(), 1)
+            torch.nn.utils.clip_grad_norm_(net.parameters(), 1) # norm操作(test3)
             optimizer.step()
 
         loss_avg = loss_avg * 0.8 + float(loss) * 0.2
@@ -237,8 +254,6 @@ def test():
             correct += pred.eq(target.data).sum().item()
     return correct / len(test_loader.dataset) * 100
 
-
-
 print('Beginning Training\n')
 net = WideResNet(args.layers, num_classes, args.widen_factor, dropRate=args.droprate).cuda()
 # Restore model
@@ -251,6 +266,17 @@ optimizer = torch.optim.SGD(net.parameters(), args.learning_rate, momentum=args.
 
 def cosine_annealing(step, total_steps, lr_max, lr_min):
     return lr_min + (lr_max - lr_min) * 0.5 * (1 + np.cos(step / total_steps * np.pi))
+
+def adjust_learning_rate(optimizer, epoch, lr_schedule=[4, 6, 8]): # POEM中使用的学习率调整方法
+    lr = args.lr
+    if epoch >= lr_schedule[0]:
+        lr *= 0.1
+    if epoch >= lr_schedule[1]:
+        lr *= 0.1
+    if epoch >= lr_schedule[2]:
+        lr *= 0.1
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
 
 scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda step: cosine_annealing(step, args.epochs * len(train_loader_in), 1, 1e-6 / args.learning_rate))
 diff = None

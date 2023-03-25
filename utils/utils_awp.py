@@ -24,6 +24,7 @@ def add_into_weights(model, diff, coeff=1.0):
         for name, param in model.named_parameters():
             if name in names_in_diff:
                 param.add_(coeff * diff[name])
+                # param.sub_(coeff * diff[name]) # 修改
 
 
 def average_diff(cur_diff, new_diff, beta):
