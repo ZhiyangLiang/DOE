@@ -56,11 +56,11 @@ torch.manual_seed(1)
 np.random.seed(args.seed)
 torch.cuda.manual_seed(1)
 
-log = logging.getLogger("cifar10_lr_POEM.log")
-fileHandler = logging.FileHandler("./logging/cifar10_lr_POEM.log", mode='a')
+log = logging.getLogger("cifar10_gaussian_noise.log")
+fileHandler = logging.FileHandler("./logging/cifar10_gaussian_noise.log", mode='a')
 log.setLevel(logging.DEBUG)
 log.addHandler(fileHandler)
-log.debug("cifar10_lr_POEM.log")
+log.debug("cifar10_gaussian_noise.log")
 log.debug("")
 for k, v in args._get_kwargs():
     log.debug(str(k)+": "+str(v))
@@ -82,30 +82,30 @@ train_transform = trn.Compose([trn.RandomHorizontalFlip(), trn.RandomCrop(32, pa
 test_transform = trn.Compose([trn.ToTensor(), trn.Normalize(mean, std)])
 
 if args.dataset == 'cifar10':
-    train_data_in = dset.CIFAR10('./data/cifar10', train=True, transform=train_transform, download=True)
-    test_data = dset.CIFAR10('./data/cifar10', train=False, transform=test_transform)
-    cifar_data = dset.CIFAR100('./data/cifar100', train=False, transform=test_transform) 
+    train_data_in = dset.CIFAR10('../data/cifar10', train=True, transform=train_transform, download=True)
+    test_data = dset.CIFAR10('../data/cifar10', train=False, transform=test_transform)
+    cifar_data = dset.CIFAR100('../data/cifar100', train=False, transform=test_transform) 
     num_classes = 10
 else:
-    train_data_in = dset.CIFAR100('./data/cifar100', train=True, transform=train_transform, download=True)
-    test_data = dset.CIFAR100('./data/cifar100', train=False, transform=test_transform)
-    cifar_data = dset.CIFAR10('./data/cifar10', train=False, transform=test_transform)
+    train_data_in = dset.CIFAR100('../data/cifar100', train=True, transform=train_transform, download=True)
+    test_data = dset.CIFAR100('../data/cifar100', train=False, transform=test_transform)
+    cifar_data = dset.CIFAR10('../data/cifar10', train=False, transform=test_transform)
     num_classes = 100
 calib_indicator = ''
 if args.calibration:
     train_data_in, val_data = validation_split(train_data_in, val_share=0.1)
     calib_indicator = '_calib'
-ood_data = dset.ImageFolder(root="./data/tiny-imagenet-200/train", transform=trn.Compose([trn.Resize(32), trn.RandomCrop(32, padding=4), trn.RandomHorizontalFlip(), trn.ToTensor(), trn.Normalize(mean, std)])) # test(3)
+ood_data = dset.ImageFolder(root="../data/tiny-imagenet-200/train", transform=trn.Compose([trn.Resize(32), trn.RandomCrop(32, padding=4), trn.RandomHorizontalFlip(), trn.ToTensor(), trn.Normalize(mean, std)])) # test(3)
 
 train_loader_in = torch.utils.data.DataLoader(train_data_in, batch_size=args.batch_size, shuffle=True, num_workers=args.prefetch, pin_memory=False)
 train_loader_out = torch.utils.data.DataLoader(ood_data, batch_size=args.oe_batch_size, shuffle=True, num_workers=args.prefetch, pin_memory=True)
 test_loader = torch.utils.data.DataLoader(test_data, batch_size=args.batch_size, shuffle=False, num_workers=args.prefetch, pin_memory=False)
 
-texture_data = dset.ImageFolder(root="./data/dtd/images", transform=trn.Compose([trn.Resize(32), trn.CenterCrop(32), trn.ToTensor(), trn.Normalize(mean, std)]))
-places365_data = dset.ImageFolder(root="./data/places365", transform=trn.Compose([trn.Resize(32), trn.CenterCrop(32), trn.ToTensor(), trn.Normalize(mean, std)]))
-lsunc_data = dset.ImageFolder(root="./data/LSUN", transform=trn.Compose([trn.Resize(32), trn.ToTensor(), trn.Normalize(mean, std)]))
-lsunr_data = dset.ImageFolder(root="./data/LSUN_resize", transform=trn.Compose([trn.Resize(32), trn.ToTensor(), trn.Normalize(mean, std)]))
-isun_data = dset.ImageFolder(root="./data/iSUN",transform=trn.Compose([trn.ToTensor(), trn.Normalize(mean, std)]))
+texture_data = dset.ImageFolder(root="../data/dtd/images", transform=trn.Compose([trn.Resize(32), trn.CenterCrop(32), trn.ToTensor(), trn.Normalize(mean, std)]))
+places365_data = dset.ImageFolder(root="../data/places365", transform=trn.Compose([trn.Resize(32), trn.CenterCrop(32), trn.ToTensor(), trn.Normalize(mean, std)]))
+lsunc_data = dset.ImageFolder(root="../data/LSUN", transform=trn.Compose([trn.Resize(32), trn.ToTensor(), trn.Normalize(mean, std)]))
+lsunr_data = dset.ImageFolder(root="../data/LSUN_resize", transform=trn.Compose([trn.Resize(32), trn.ToTensor(), trn.Normalize(mean, std)]))
+isun_data = dset.ImageFolder(root="../data/iSUN",transform=trn.Compose([trn.ToTensor(), trn.Normalize(mean, std)]))
 
 texture_loader = torch.utils.data.DataLoader(texture_data, batch_size=args.test_bs, shuffle=True, num_workers=4, pin_memory=False)
 places365_loader = torch.utils.data.DataLoader(places365_data, batch_size=args.test_bs, shuffle=True, num_workers=4, pin_memory=False)
@@ -150,18 +150,6 @@ def get_and_print_results(mylog, ood_loader, in_score, num_to_avg=args.num_to_av
     print_measures(mylog, auroc, aupr, fpr, '')
     return fpr, auroc, aupr
 
-def add_gaussian_noise(model, coeff):
-    with torch.no_grad():
-        for name, param in model.named_parameters():
-            noise = torch.empty_like(param).normal_(0, 1)
-            param.add_(coeff * noise)
-
-def add_uniform_noise(model, coeff):
-    with torch.no_grad():
-        for name, param in model.named_parameters():
-            noise = torch.empty_like(param).uniform_(-1, 1)
-            param.add_(coeff * noise)
-
 def train(epoch, diff):
     
     adjust_learning_rate(optimizer, epoch) # POEM中使用的学习率调整方法
@@ -192,8 +180,9 @@ def train(epoch, diff):
             proxy_optim.zero_grad()
             reg_sur.backward()
             # l_sur.backward()
-            # torch.nn.utils.clip_grad_norm_(net.parameters(), 1) # norm操作(test2)
-            torch.nn.utils.clip_grad_norm_(proxy.parameters(), 1) # 修改
+            torch.nn.utils.clip_grad_norm_(net.parameters(), 1) # norm操作(test2)
+            # torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=1, norm_type=1) # 修改
+            # torch.nn.utils.clip_grad_norm_(proxy.parameters(), 1) # 修改
             proxy_optim.step()
             if epoch == args.warmup and batch_idx == 0:
                 diff = awp.diff_in_weights(net, proxy) # 微分操作(仅在第一次使用, 因为第一次无法加权平均)
@@ -203,8 +192,6 @@ def train(epoch, diff):
 
             awp.add_into_weights(net, diff, coeff = gamma)
             # awp.add_into_weights(net, diff, coeff = - gamma) # 修改
-            # add_gaussian_noise(net, coeff = gamma) # 添加高斯分布的扰动 修改
-            # add_uniform_noise(net, coeff = gamma) # 添加均匀分布的扰动 修改
         
         x = net(data)
         l_ce = F.cross_entropy(x[:len(in_set[0])], target)
@@ -223,19 +210,19 @@ def train(epoch, diff):
         optimizer.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(net.parameters(), 1) # norm操作(test3)
+        # torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=1, norm_type=1) # 修改
         optimizer.step()
 
         if epoch >= args.warmup:
             awp.add_into_weights(net, diff, coeff = - gamma)
             # awp.add_into_weights(net, diff, coeff = gamma) # 修改
-            # add_gaussian_noise(net, coeff = - gamma) # 添加高斯分布的扰动 修改
-            # add_uniform_noise(net, coeff = - gamma) # 添加均匀分布的扰动 修改
             optimizer.zero_grad()
             x = net(data)
             l_ce = F.cross_entropy(x[:len(in_set[0])], target)
             loss = l_ce # + l_kl
             loss.backward()
             torch.nn.utils.clip_grad_norm_(net.parameters(), 1) # norm操作(test3)
+            # torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=1, norm_type=1) # 修改
             optimizer.step()
 
         loss_avg = loss_avg * 0.8 + float(loss) * 0.2
@@ -284,9 +271,8 @@ def adjust_learning_rate(optimizer, epoch, lr_schedule=[4, 6, 8]): # POEM中使�
 # scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda step: cosine_annealing(step, args.epochs * len(train_loader_in), 1, 1e-6 / args.learning_rate))
 diff = None
 
-
-# for epoch in range(args.begin_epoch, args.epochs - 1):
-for epoch in range(args.begin_epoch, args.epochs): # 修改
+for epoch in range(args.begin_epoch, args.epochs - 1):
+# for epoch in range(args.begin_epoch, args.epochs): # 修改
     diff = train(epoch, diff)
 
 net.eval()

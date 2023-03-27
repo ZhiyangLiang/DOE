@@ -13,10 +13,13 @@ def diff_in_weights(model, proxy):
         if len(old_w.size()) <= 1:
             continue
         if 'weight' in old_k:
-            diff_w = new_w - old_w
-            diff_dict[old_k] = old_w.norm() / (diff_w.norm() + EPS) * diff_w
-    return diff_dict
+            # diff_w = new_w - old_w # 原
+            # diff_dict[old_k] = old_w.norm() / (diff_w.norm() + EPS) * diff_w # 原
 
+            noise = torch.empty_like(old_w).normal_(0, 1) # Gaussian Noise 修改
+            # noise = torch.empty_like(old_w).uniform_(-1, 1) # Uniform noise 修改
+            diff_dict[old_k] = old_w.norm() / (noise.norm() + EPS) * noise # 修改
+    return diff_dict
 
 def add_into_weights(model, diff, coeff=1.0):
     names_in_diff = diff.keys()
@@ -25,7 +28,6 @@ def add_into_weights(model, diff, coeff=1.0):
             if name in names_in_diff:
                 param.add_(coeff * diff[name])
                 # param.sub_(coeff * diff[name]) # 修改
-
 
 def average_diff(cur_diff, new_diff, beta):
     for key in cur_diff.keys():
