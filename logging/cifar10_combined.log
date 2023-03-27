@@ -1,4 +1,4 @@
-cifar10_gaussian_perturbation.log
+cifar10_combined.log
 
 batch_size: 128
 begin_epoch: 0
@@ -22,16 +22,16 @@ use_xent: False
 warmup: 5
 widen_factor: 2
 
-  FPR95 AUROC AUPR (acc 94.21)
+  FPR95 AUROC AUPR (acc 94.36)
 lsun
-& 0.05 & 99.79 & 99.96
+& 0.05 & 99.87 & 99.98
 isun
-& 2.00 & 99.19 & 99.85
+& 0.75 & 99.54 & 99.91
 texture
-& 14.65 & 96.78 & 99.17
+& 9.35 & 97.63 & 99.37
 places
-& 20.10 & 96.24 & 99.20
+& 13.05 & 97.25 & 99.40
 total
-& 9.20 & 98.00 & 99.54
+& 5.80 & 98.57 & 99.67
 cifar
-& 58.35 & 87.95 & 97.27
+& 47.65 & 90.21 & 97.75

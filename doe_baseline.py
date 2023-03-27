@@ -50,19 +50,19 @@ parser.add_argument('--seed', type=int, default=1, help='seed for np(tinyimages8
 parser.add_argument('--warmup', type=int, default=5)
 parser.add_argument('--begin_epoch', type=int, default=0)
 
-# torch.cuda.set_device(0) # 选择第0张卡
-torch.cuda.set_device(1) # 选择第1张卡
+torch.cuda.set_device(0) # 选择第0张卡
+# torch.cuda.set_device(1) # 选择第1张卡
 
 args = parser.parse_args()
 torch.manual_seed(1)
 np.random.seed(args.seed)
 torch.cuda.manual_seed(1)
 
-log = logging.getLogger("cifar10_std-1.log")
-fileHandler = logging.FileHandler("./logging/cifar10_std-1.log", mode='a')
+log = logging.getLogger("cifar10_baseline.log")
+fileHandler = logging.FileHandler("./logging/cifar10_baseline.log", mode='a')
 log.setLevel(logging.DEBUG)
 log.addHandler(fileHandler)
-log.debug("cifar10_std-1.log")
+log.debug("cifar10_baseline.log")
 log.debug("")
 for k, v in args._get_kwargs():
     log.debug(str(k)+": "+str(v))
@@ -86,12 +86,12 @@ test_transform = trn.Compose([trn.ToTensor(), trn.Normalize(mean, std)])
 if args.dataset == 'cifar10':
     train_data_in = dset.CIFAR10('../data/cifar10', train=True, transform=train_transform, download=True)
     test_data = dset.CIFAR10('../data/cifar10', train=False, transform=test_transform)
-    cifar_data = dset.CIFAR100('../data/cifar100', train=False, transform=test_transform, download=True) 
+    cifar_data = dset.CIFAR100('../data/cifar100', train=False, transform=test_transform) 
     num_classes = 10
 else:
     train_data_in = dset.CIFAR100('../data/cifar100', train=True, transform=train_transform, download=True)
     test_data = dset.CIFAR100('../data/cifar100', train=False, transform=test_transform)
-    cifar_data = dset.CIFAR10('../data/cifar10', train=False, transform=test_transform, download=True)
+    cifar_data = dset.CIFAR10('../data/cifar10', train=False, transform=test_transform)
     num_classes = 100
 calib_indicator = ''
 if args.calibration:
@@ -154,11 +154,10 @@ def get_and_print_results(mylog, ood_loader, in_score, num_to_avg=args.num_to_av
 
 def train(epoch, diff):
     
-    # adjust_learning_rate(optimizer, epoch) # POEM中使用的学习率调整方法 修改
+    # adjust_learning_rate(optimizer, epoch) # POEM中使用的学习率调整方法
     
-    proxy = WideResNet(args.layers, num_classes, args.widen_factor, dropRate = 0).cuda()
-    # proxy = AllConvNet(num_classes) # 修改
-    proxy_optim = torch.optim.SGD(proxy.parameters(), lr=1) # 辅助模型
+    # proxy = WideResNet(args.layers, num_classes, args.widen_factor, dropRate = 0).cuda()
+    # proxy_optim = torch.optim.SGD(proxy.parameters(), lr=1) # 辅助模型
 
     net.train()
 
@@ -168,42 +167,44 @@ def train(epoch, diff):
         data, target = torch.cat((in_set[0], out_set[0]), 0), in_set[1]
         data, target = data.cuda(), target.cuda()
 
-        if epoch >= args.warmup:
-            if args.dataset == 'cifar10':
-                gamma =  torch.Tensor([1e-1,1e-2,1e-3,1e-4])[torch.randperm(4)][0]
-            else: 
-                gamma =  torch.Tensor([1e-1,1e-2,1e-3,1e-4])[torch.randperm(4)][0] # 31
-            proxy.load_state_dict(net.state_dict())
-            proxy.train()
-            scale = torch.Tensor([1]).cuda().requires_grad_()
-            x = proxy(data) * scale
-            l_sur = (x[len(in_set[0]):].mean(1) - torch.logsumexp(x[len(in_set[0]):], dim=1)).mean() # 这里求的是min Loe, 所以会差一个负号
-            # l_sur = - (x.log_softmax(1) * (x / 0.1).softmax(1).detach()).sum(-1).mean()
-            reg_sur = torch.sum(torch.autograd.grad(l_sur, [scale], create_graph = True)[0] ** 2) # 计算l_sur关于scale的梯度，并将其平方后求和
-            proxy_optim.zero_grad()
-            reg_sur.backward()
+        # if epoch >= args.warmup:
+            # if args.dataset == 'cifar10':
+            #     gamma =  torch.Tensor([1e-1,1e-2,1e-3,1e-4])[torch.randperm(4)][0]
+            # else: 
+            #     gamma =  torch.Tensor([1e-1,1e-2,1e-3,1e-4])[torch.randperm(4)][0] # 31
+            # proxy.load_state_dict(net.state_dict())
+            # proxy.train()
+            # scale = torch.Tensor([1]).cuda().requires_grad_()
+            # x = proxy(data) * scale
+            # l_sur = (x[len(in_set[0]):].mean(1) - torch.logsumexp(x[len(in_set[0]):], dim=1)).mean() # 这里求的是min Loe, 所以会差一个负号
+            # # l_sur = - (x.log_softmax(1) * (x / 0.1).softmax(1).detach()).sum(-1).mean()
+            # reg_sur = torch.sum(torch.autograd.grad(l_sur, [scale], create_graph = True)[0] ** 2) # 计算l_sur关于scale的梯度，并将其平方后求和
+            # proxy_optim.zero_grad()
+            # reg_sur.backward()
             # l_sur.backward()
-            torch.nn.utils.clip_grad_norm_(net.parameters(), 1) # norm操作(test2)
+            # torch.nn.utils.clip_grad_norm_(net.parameters(), 1) # norm操作(test2)
             # torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=1, norm_type=1) # 修改
             # torch.nn.utils.clip_grad_norm_(proxy.parameters(), 1) # 修改
-            proxy_optim.step()
-            if epoch == args.warmup and batch_idx == 0:
-                diff = awp.diff_in_weights(net, proxy) # 微分操作(仅在第一次使用, 因为第一次无法加权平均)
-            else:
-                # diff = awp.diff_in_weights(net, proxy)
-                diff = awp.average_diff(diff, awp.diff_in_weights(net, proxy), beta = .6) # 指数加权平均操作
+            # proxy_optim.step()
+            # if epoch == args.warmup and batch_idx == 0:
+            #     diff = awp.diff_in_weights(net, proxy) # 微分操作(仅在第一次使用, 因为第一次无法加权平均)
+            # else:
+            #     # diff = awp.diff_in_weights(net, proxy)
+            #     diff = awp.average_diff(diff, awp.diff_in_weights(net, proxy), beta = .6) # 指数加权平均操作
 
-            awp.add_into_weights(net, diff, coeff = gamma)
+            # awp.add_into_weights(net, diff, coeff = gamma)
             # awp.add_into_weights(net, diff, coeff = - gamma) # 修改
         
         x = net(data)
         l_ce = F.cross_entropy(x[:len(in_set[0])], target)
-        l_oe = - (x[len(in_set[0]):].mean(1) - torch.logsumexp(x[len(in_set[0]):], dim=1)).mean()
+        # l_oe = - (x[len(in_set[0]):].mean(1) - torch.logsumexp(x[len(in_set[0]):], dim=1)).mean()
+        l_oe = 0.5 * - (x[len(in_set[0]):].mean(1) - torch.logsumexp(x[len(in_set[0]):], dim=1)).mean() # 修改 OE
         if args.dataset == 'cifar10':
             if epoch >= args.warmup:
                 loss = l_oe
             else: 
-                loss = l_ce +  l_oe
+                # loss = l_ce +  l_oe
+                loss = l_ce +  l_oe 
         else: 
             if epoch >= args.warmup:
                 loss = l_oe
@@ -212,21 +213,21 @@ def train(epoch, diff):
             
         optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(net.parameters(), 1) # norm操作(test3)
+        # torch.nn.utils.clip_grad_norm_(net.parameters(), 1) # norm操作(test3)
         # torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=1, norm_type=1) # 修改
         optimizer.step()
 
-        if epoch >= args.warmup:
-            awp.add_into_weights(net, diff, coeff = - gamma)
-            # awp.add_into_weights(net, diff, coeff = gamma) # 修改
-            optimizer.zero_grad()
-            x = net(data)
-            l_ce = F.cross_entropy(x[:len(in_set[0])], target)
-            loss = l_ce # + l_kl
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(net.parameters(), 1) # norm操作(test3)
-            # torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=1, norm_type=1) # 修改
-            optimizer.step()
+        # if epoch >= args.warmup:
+        #     awp.add_into_weights(net, diff, coeff = - gamma)
+        #     # awp.add_into_weights(net, diff, coeff = gamma) # 修改
+        #     optimizer.zero_grad()
+        #     x = net(data)
+        #     l_ce = F.cross_entropy(x[:len(in_set[0])], target)
+        #     loss = l_ce # + l_kl
+        #     loss.backward()
+        #     torch.nn.utils.clip_grad_norm_(net.parameters(), 1) # norm操作(test3)
+        #     # torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=1, norm_type=1) # 修改
+        #     optimizer.step()
 
         loss_avg = loss_avg * 0.8 + float(loss) * 0.2
         sys.stdout.write('\r epoch %2d %d/%d loss %.2f' %(epoch, batch_idx + 1, len(train_loader_in), loss_avg))
@@ -249,7 +250,6 @@ def test():
 
 print('Beginning Training\n')
 net = WideResNet(args.layers, num_classes, args.widen_factor, dropRate=args.droprate).cuda()
-# net = AllConvNet(num_classes) # 修改
 # Restore model
 if args.dataset == 'cifar10':
     model_path = './ckpt/cifar10_wrn_pretrained_epoch_99.pt'
@@ -275,8 +275,7 @@ def adjust_learning_rate(optimizer, epoch, lr_schedule=[4, 6, 8]): # POEM中使�
 scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda step: cosine_annealing(step, args.epochs * len(train_loader_in), 1, 1e-6 / args.learning_rate))
 diff = None
 
-for epoch in range(args.begin_epoch, args.epochs - 2): # 修改
-# for epoch in range(args.begin_epoch, args.epochs - 1):
+for epoch in range(args.begin_epoch, args.epochs - 1):
 # for epoch in range(args.begin_epoch, args.epochs): # 修改
     diff = train(epoch, diff)
 
