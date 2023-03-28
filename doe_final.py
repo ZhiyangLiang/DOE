@@ -10,12 +10,14 @@ import torch.nn.functional as F
 
 from models.wrn import WideResNet
 from models.allconv import AllConvNet
+import torchvision.models as models
 import utils.utils_awp as awp
 from utils.display_results import  get_measures, print_measures
 from utils.validation_dataset import validation_split
 
 import os
 import logging
+import pdb
 
 parser = argparse.ArgumentParser(description='Tunes a CIFAR Classifier with DOE',
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -50,19 +52,19 @@ parser.add_argument('--seed', type=int, default=1, help='seed for np(tinyimages8
 parser.add_argument('--warmup', type=int, default=5)
 parser.add_argument('--begin_epoch', type=int, default=0)
 
-# torch.cuda.set_device(0) # 选择第0张卡
-torch.cuda.set_device(1) # 选择第1张卡
+torch.cuda.set_device(0) # 选择第0张卡
+# torch.cuda.set_device(1) # 选择第1张卡
 
 args = parser.parse_args()
 torch.manual_seed(1)
 np.random.seed(args.seed)
 torch.cuda.manual_seed(1)
 
-log = logging.getLogger("cifar10_std-1.log")
-fileHandler = logging.FileHandler("./logging/cifar10_std-1.log", mode='a')
+log = logging.getLogger("cifar10_resnet50.log")
+fileHandler = logging.FileHandler("./logging/cifar10_resnet50.log", mode='a')
 log.setLevel(logging.DEBUG)
 log.addHandler(fileHandler)
-log.debug("cifar10_std-1.log")
+log.debug("cifar10_resnet50.log")
 log.debug("")
 for k, v in args._get_kwargs():
     log.debug(str(k)+": "+str(v))
@@ -156,8 +158,12 @@ def train(epoch, diff):
     
     # adjust_learning_rate(optimizer, epoch) # POEM中使用的学习率调整方法 修改
     
-    proxy = WideResNet(args.layers, num_classes, args.widen_factor, dropRate = 0).cuda()
-    # proxy = AllConvNet(num_classes) # 修改
+    # proxy = WideResNet(args.layers, num_classes, args.widen_factor, dropRate = 0).cuda()
+    # proxy = AllConvNet(num_classes).cuda() # 修改
+    # proxy = models.resnet18() # 修改
+    proxy = models.resnet50() # 修改
+    proxy.fc = torch.nn.Linear(in_features=proxy.fc.in_features, out_features=10, bias=True) # 修改
+    proxy.cuda() # 修改
     proxy_optim = torch.optim.SGD(proxy.parameters(), lr=1) # 辅助模型
 
     net.train()
@@ -188,14 +194,19 @@ def train(epoch, diff):
             # torch.nn.utils.clip_grad_norm_(proxy.parameters(), 1) # 修改
             proxy_optim.step()
             if epoch == args.warmup and batch_idx == 0:
-                diff = awp.diff_in_weights(net, proxy) # 微分操作(仅在第一次使用, 因为第一次无法加权平均)
+                diff = awp.diff_in_weights(net, proxy) # 微分操作(第一次还无法加权平均)
             else:
                 # diff = awp.diff_in_weights(net, proxy)
                 diff = awp.average_diff(diff, awp.diff_in_weights(net, proxy), beta = .6) # 指数加权平均操作
 
             awp.add_into_weights(net, diff, coeff = gamma)
             # awp.add_into_weights(net, diff, coeff = - gamma) # 修改
-        
+
+        #结合DRO
+        # phi = - (x[len(in_set[0]):].mean(1) - torch.logsumexp(x[len(in_set[0]):], dim=1)).mean() - gamma * 
+        #结合DRO
+
+        # pdb.set_trace()
         x = net(data)
         l_ce = F.cross_entropy(x[:len(in_set[0])], target)
         l_oe = - (x[len(in_set[0]):].mean(1) - torch.logsumexp(x[len(in_set[0]):], dim=1)).mean()
@@ -248,13 +259,19 @@ def test():
     return correct / len(test_loader.dataset) * 100
 
 print('Beginning Training\n')
-net = WideResNet(args.layers, num_classes, args.widen_factor, dropRate=args.droprate).cuda()
+# net = WideResNet(args.layers, num_classes, args.widen_factor, dropRate=args.droprate).cuda()
 # net = AllConvNet(num_classes) # 修改
+# net = models.resnet18() # 修改
+net = models.resnet50() # 修改
+net.fc = torch.nn.Linear(in_features=net.fc.in_features, out_features=10, bias=True) # 修改
+net.cuda() # 修改
 # Restore model
-if args.dataset == 'cifar10':
-    model_path = './ckpt/cifar10_wrn_pretrained_epoch_99.pt'
-else:
-    model_path = './ckpt/cifar100_wrn_pretrained_epoch_99.pt'
+# if args.dataset == 'cifar10':
+#     model_path = './ckpt/cifar10_wrn_pretrained_epoch_99.pt'
+# else:
+#     model_path = './ckpt/cifar100_wrn_pretrained_epoch_99.pt'
+# model_path = './ckpt/resnet18_cifar10_epoch100.pt' # 修改
+model_path = './ckpt/resnet50_cifar10_epoch100.pt' # 修改
 net.load_state_dict(torch.load(model_path))
 optimizer = torch.optim.SGD(net.parameters(), args.learning_rate, momentum=args.momentum, weight_decay=args.decay, nesterov=True)
 
