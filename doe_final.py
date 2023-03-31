@@ -185,7 +185,8 @@ def train(epoch, diff):
             x = proxy(data) * scale
             l_sur = (x[len(in_set[0]):].mean(1) - torch.logsumexp(x[len(in_set[0]):], dim=1)).mean() # 这里求的是min Loe, 所以会差一个负号
             # l_sur = - (x.log_softmax(1) * (x / 0.1).softmax(1).detach()).sum(-1).mean()
-            reg_sur = torch.sum(torch.autograd.grad(l_sur, [scale], create_graph = True)[0] ** 2) # 计算l_sur关于scale的梯度，并将其平方后求和
+            emb = proxy.intermediate_forward_simple(data) # 修改!
+            reg_sur = torch.sum(torch.autograd.grad(l_sur, [scale], create_graph = True)[0] ** 2) + torch.norm(emb, 1) # 修改! 计算l_sur关于scale的梯度，并将其平方后求和
             proxy_optim.zero_grad()
             reg_sur.backward()
             # l_sur.backward()
@@ -195,15 +196,32 @@ def train(epoch, diff):
             proxy_optim.step()
             if epoch == args.warmup and batch_idx == 0:
                 diff = awp.diff_in_weights(net, proxy) # 微分操作(第一次还无法加权平均)
+                #结合DRO
+                # diff upgrade
+                # diff_optim = torch.optim.SGD(diff, lr=1)
+                # m_phi = - ( - (x[len(in_set[0]):].mean(1) - torch.logsumexp(x[len(in_set[0]):], dim=1)).mean() - gamma * diff.norm())
+                # m_phi.backward()
+                # diff.step()
+                #结合DRO
             else:
-                # diff = awp.diff_in_weights(net, proxy)
                 diff = awp.average_diff(diff, awp.diff_in_weights(net, proxy), beta = .6) # 指数加权平均操作
+                #结合DRO
+                # diff upgrade
+                # diff_optim = torch.optim.SGD(diff, lr=1)
+                # m_phi = - ( - (x[len(in_set[0]):].mean(1) - torch.logsumexp(x[len(in_set[0]):], dim=1)).mean() - gamma * diff.norm())
+                # m_phi.backward()
+                # diff.step()
+                #结合DRO
 
             awp.add_into_weights(net, diff, coeff = gamma)
             # awp.add_into_weights(net, diff, coeff = - gamma) # 修改
 
         #结合DRO
-        # phi = - (x[len(in_set[0]):].mean(1) - torch.logsumexp(x[len(in_set[0]):], dim=1)).mean() - gamma * 
+        # gamma upgrade
+        # gamma_optim = torch.optim.SGD(gamma, lr=1)
+        # func = torch.Tensor([1]).cuda().requires_grad_() - diff
+        # func.backward()
+        # gamma_optim.step()
         #结合DRO
 
         # pdb.set_trace()
@@ -292,8 +310,8 @@ def adjust_learning_rate(optimizer, epoch, lr_schedule=[4, 6, 8]): # POEM中使�
 scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda step: cosine_annealing(step, args.epochs * len(train_loader_in), 1, 1e-6 / args.learning_rate))
 diff = None
 
-for epoch in range(args.begin_epoch, args.epochs - 2): # 修改
-# for epoch in range(args.begin_epoch, args.epochs - 1):
+# for epoch in range(args.begin_epoch, args.epochs - 2): # 修改
+for epoch in range(args.begin_epoch, args.epochs - 1):
 # for epoch in range(args.begin_epoch, args.epochs): # 修改
     diff = train(epoch, diff)
 

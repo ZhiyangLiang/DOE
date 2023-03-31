@@ -199,17 +199,18 @@ def train(epoch, diff):
         l_ce = F.cross_entropy(x[:len(in_set[0])], target)
         # l_oe = - (x[len(in_set[0]):].mean(1) - torch.logsumexp(x[len(in_set[0]):], dim=1)).mean()
         l_oe = 0.5 * - (x[len(in_set[0]):].mean(1) - torch.logsumexp(x[len(in_set[0]):], dim=1)).mean() # 修改 OE
-        if args.dataset == 'cifar10':
-            if epoch >= args.warmup:
-                loss = l_oe
-            else: 
-                # loss = l_ce +  l_oe
-                loss = l_ce +  l_oe 
-        else: 
-            if epoch >= args.warmup:
-                loss = l_oe
-            else: 
-                loss = l_ce +  l_oe
+        # if args.dataset == 'cifar10':
+        #     if epoch >= args.warmup:
+        #         loss = l_oe
+        #     else: 
+        #         # loss = l_ce +  l_oe
+        #         loss = l_ce +  l_oe 
+        # else: 
+        #     if epoch >= args.warmup:
+        #         loss = l_oe
+        #     else: 
+        #         loss = l_ce +  l_oe
+        loss = l_ce +  l_oe
             
         optimizer.zero_grad()
         loss.backward()
