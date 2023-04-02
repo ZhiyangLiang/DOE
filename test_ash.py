@@ -75,8 +75,8 @@ class ResNet18(nn.Module):
         super(ResNet18, self).__init__()
         self.resnet18 = models.resnet18()
         self.resnet18.conv1 = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False)
-        self.resnet18.fc = nn.Linear(in_features=net.fc.in_features, out_features=10, bias=True)
-        # self.resnet18.fc = nn.Linear(in_features=net.fc.in_features, out_features=100, bias=True)
+        self.resnet18.fc = nn.Linear(in_features=self.resnet18.fc.in_features, out_features=10, bias=True)
+        # self.resnet18.fc = nn.Linear(in_features=self.resnet18.fc.in_features, out_features=100, bias=True)
         self.resnet18.load_state_dict(torch.load('./ckpt/resnet18_cifar10_epoch147.pt'))
         # self.resnet18.load_state_dict(torch.load('./ckpt/resnet18_cifar100_epoch109.pt'))
         self.conv1 = self.resnet18.conv1
