@@ -1,0 +1,143 @@
+cifar100_wrn_0.01_poem.log
+
+batch_size: 128
+begin_epoch: 0
+calibration: False
+dataset: cifar100
+decay: 0.0005
+droprate: 0.3
+epochs: 10
+layers: 40
+learning_rate: 0.01
+lr_adjust: poem
+model: wrn
+momentum: 0.9
+ngpu: 1
+num_to_avg: 1
+oe_batch_size: 256
+out_as_pos: False
+prefetch: 4
+seed: 1
+test: False
+test_bs: 200
+use_xent: False
+warmup: 5
+widen_factor: 2
+
+  FPR95 AUROC AUPR (acc 72.47)
+lsun
+& 23.10 & 96.30 & 99.26
+isun
+& 10.50 & 98.17 & 99.63
+texture
+& 53.25 & 86.36 & 96.50
+places
+& 53.85 & 86.60 & 96.64
+total
+& 35.18 & 91.86 & 98.01
+cifar
+& 91.00 & 69.60 & 92.49
+  FPR95 AUROC AUPR (acc 73.55)
+lsun
+& 21.25 & 96.61 & 99.33
+isun
+& 6.45 & 98.61 & 99.73
+texture
+& 50.05 & 89.43 & 97.54
+places
+& 59.55 & 85.30 & 96.43
+total
+& 34.33 & 92.49 & 98.26
+cifar
+& 90.15 & 70.82 & 92.61
+  FPR95 AUROC AUPR (acc 74.10)
+lsun
+& 10.10 & 97.95 & 99.61
+isun
+& 4.30 & 98.90 & 99.78
+texture
+& 43.00 & 90.72 & 97.78
+places
+& 64.60 & 83.23 & 95.69
+total
+& 30.50 & 92.70 & 98.22
+cifar
+& 89.50 & 72.70 & 93.30
+  FPR95 AUROC AUPR (acc 73.53)
+lsun
+& 5.75 & 98.51 & 99.71
+isun
+& 22.55 & 96.17 & 99.23
+texture
+& 46.55 & 89.64 & 97.56
+places
+& 62.40 & 84.71 & 96.32
+total
+& 34.31 & 92.26 & 98.20
+cifar
+& 90.00 & 68.96 & 92.05
+  FPR95 AUROC AUPR (acc 74.70)
+lsun
+& 7.10 & 98.22 & 99.66
+isun
+& 23.85 & 96.11 & 99.21
+texture
+& 45.80 & 90.67 & 97.92
+places
+& 64.90 & 84.03 & 96.16
+total
+& 35.41 & 92.26 & 98.24
+cifar
+& 90.60 & 71.00 & 92.77
+  FPR95 AUROC AUPR (acc 72.65)
+lsun
+& 7.85 & 98.61 & 99.71
+isun
+& 18.05 & 96.70 & 99.28
+texture
+& 38.10 & 91.28 & 97.95
+places
+& 69.30 & 82.11 & 95.57
+total
+& 33.32 & 92.17 & 98.13
+cifar
+& 85.05 & 72.14 & 92.97
+  FPR95 AUROC AUPR (acc 74.71)
+lsun
+& 5.15 & 98.78 & 99.76
+isun
+& 5.85 & 98.78 & 99.75
+texture
+& 28.45 & 94.00 & 98.65
+places
+& 56.15 & 86.74 & 96.86
+total
+& 23.90 & 94.57 & 98.76
+cifar
+& 86.85 & 73.99 & 93.58
+  FPR95 AUROC AUPR (acc 74.47)
+lsun
+& 7.40 & 98.18 & 99.65
+isun
+& 11.15 & 97.94 & 99.60
+texture
+& 36.75 & 92.41 & 98.25
+places
+& 58.70 & 86.32 & 96.78
+total
+& 28.50 & 93.71 & 98.57
+cifar
+& 91.20 & 70.30 & 92.48
+  FPR95 AUROC AUPR (acc 71.25)
+lsun
+& 5.95 & 98.83 & 99.76
+isun
+& 15.70 & 96.95 & 99.31
+texture
+& 40.55 & 90.31 & 97.63
+places
+& 73.60 & 79.95 & 95.08
+total
+& 33.95 & 91.51 & 97.95
+cifar
+& 86.25 & 71.34 & 92.66
