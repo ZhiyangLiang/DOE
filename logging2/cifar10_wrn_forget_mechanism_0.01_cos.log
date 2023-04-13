@@ -1,0 +1,38 @@
+cifar10_wrn_forget_mechanism_0.01_cos.log
+
+batch_size: 128
+begin_epoch: 0
+calibration: False
+dataset: cifar10
+decay: 0.0005
+droprate: 0.3
+epochs: 10
+forget_mechanism: yes
+layers: 40
+learning_rate: 0.01
+lr_adjust: cos
+model: wrn
+momentum: 0.9
+ngpu: 1
+num_to_avg: 1
+oe_batch_size: 256
+oe_setting: no
+out_as_pos: False
+prefetch: 4
+seed: 1
+test: False
+test_bs: 200
+use_xent: False
+warmup: 5
+widen_factor: 2
+
+  FPR95 AUROC AUPR (acc 94.45)
+places
+& 8.80 & 98.03 & 99.56
+tiny-imagenet-200
+& 0.15 & 99.87 & 99.97
+  FPR95 AUROC AUPR (acc 93.55)
+places
+& 2.60 & 99.29 & 99.86
+tiny-imagenet-200
+& 1.70 & 99.49 & 99.90

@@ -169,8 +169,20 @@ def get_and_print_results(mylog, ood_loader, in_score, num_to_avg=args.num_to_av
 def train(epoch, diff):
     if args.lr_adjust == 'poem':
         adjust_learning_rate(optimizer, epoch) # 修改
-    
-    proxy = WideResNet(args.layers, num_classes, args.widen_factor, dropRate = 0).cuda()
+
+    if args.model == 'wrn':
+        proxy = WideResNet(args.layers, num_classes, args.widen_factor, dropRate = 0).cuda()
+    elif args.model == 'resnet18':
+        proxy = models.resnet18()
+        proxy.conv1 = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False)
+        proxy.fc = torch.nn.Linear(in_features=proxy.fc.in_features, out_features=num_classes, bias=True)
+        proxy.cuda()
+    elif args.model == 'resnet50':
+        proxy = models.resnet50()
+        proxy.conv1 = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False)
+        proxy.fc = torch.nn.Linear(in_features=proxy.fc.in_features, out_features=num_classes, bias=True)
+        proxy.cuda()
+
     proxy_optim = torch.optim.SGD(proxy.parameters(), lr=1) # 辅助模型
 
     net.train()
@@ -286,18 +298,20 @@ print('Beginning Training\n')
 # Restore model
 if args.dataset == 'cifar10':
     if args.model == 'wrn':
-        net = WideResNet(args.layers, num_classes, args.widen_factor, dropRate=args.droprate)
+        net = WideResNet(args.layers, num_classes, args.widen_factor, dropRate=args.droprate).cuda()
         model_path = './ckpt/cifar10_wrn_pretrained_epoch_99.pt'
     elif args.model == 'resnet18':
         net = models.resnet18()
         net.conv1 = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False)
         net.fc = torch.nn.Linear(in_features=net.fc.in_features, out_features=num_classes, bias=True)
         model_path = './ckpt/resnet18_cifar10_epoch147.pt'
+        net.cuda()
     elif args.model == 'resnet50':
         net = models.resnet50()
         net.conv1 = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False)
         net.fc = torch.nn.Linear(in_features=net.fc.in_features, out_features=num_classes, bias=True)
         model_path = './ckpt/resnet50_cifar10_epoch124.pt'
+        net.cuda()
 elif args.dataset == 'cifar100':
     if args.model == 'wrn':
         net = WideResNet(args.layers, num_classes, args.widen_factor, dropRate=args.droprate).cuda()
@@ -307,13 +321,14 @@ elif args.dataset == 'cifar100':
         net.conv1 = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False)
         net.fc = torch.nn.Linear(in_features=net.fc.in_features, out_features=num_classes, bias=True)
         model_path = './ckpt/resnet18_cifar100_epoch109.pt'
+        net.cuda()
     elif args.model == 'resnet50':
         net = models.resnet50()
         net.conv1 = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False)
         net.fc = torch.nn.Linear(in_features=net.fc.in_features, out_features=num_classes, bias=True)
         model_path = './ckpt/resnet50_cifar100_epoch170.pt'
+        net.cuda()
 
-net.cuda()
 net.load_state_dict(torch.load(model_path))
 optimizer = torch.optim.SGD(net.parameters(), args.learning_rate, momentum=args.momentum, weight_decay=args.decay, nesterov=True)
 
@@ -364,4 +379,6 @@ def evaluate():
 # for epoch in range(args.begin_epoch, args.epochs): # 修改
 for epoch in range(args.begin_epoch, args.epochs - 1):
     diff = train(epoch, diff)
-    evaluate()
+    # evaluate()
+
+evaluate()
